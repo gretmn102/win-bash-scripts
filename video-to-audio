@@ -1,0 +1,20 @@
+#!/bin/bash
+
+set -euo pipefail
+
+usage() {
+  echo "Usage: $(basename "$0") <folder_path>"
+  echo
+  echo "Where:"
+  echo "  folder_path folder with *.mp4"
+  echo
+  echo "Options:"
+  echo "  --help, -h  Show this help."
+  exit 1
+}
+
+folder_path="$1"
+
+for file in "$folder_path"/*.mp4; do
+  ffmpeg -i "$file" "${file%.*}.mp3"
+done

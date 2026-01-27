@@ -1,0 +1,8 @@
+#!/bin/sh
+
+if [ -z $TMPDIR ]; then
+  echo "TMPDIR is empty!"
+  exit
+fi
+
+rm -rf $TMPDIR/*

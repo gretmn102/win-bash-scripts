@@ -1,0 +1,13 @@
+#!/bin/bash
+
+if [[ "$#" -ne 1 ]]; then
+  echo "Использование: $0 <текст для поиска>"
+  exit 1
+fi
+
+search_text=$1
+
+git rev-list --all | while read commit; do
+  echo "Ищем в коммите: $commit"
+  echo $(git grep -F "$search_text" $commit)
+done

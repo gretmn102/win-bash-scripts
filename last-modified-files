@@ -1,0 +1,55 @@
+#!/bin/bash
+
+set -euo pipefail
+
+usage() {
+  echo "Usage: $(basename "$0") [--reverse|-r] [path]"
+  echo
+  echo "Where:"
+  echo "  --reverse, -r  По умолчанию список отсортирован от самых новых к самым старым. Этот параметр переворачивает сортировку."
+  echo "  path           Default is \`.\`"
+  echo
+  echo "Options:"
+  echo "  --help, -h     Show this help."
+  exit 1
+}
+
+reverse=false
+
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --help|-h)
+      usage
+      ;;
+    --reverse|-r)
+      reverse=true
+      shift
+      ;;
+    *)
+      if [[ -z "${path+x}" ]]; then
+        path="$1"
+      else
+        echo "Error: unknown argument '$path'."
+        echo "Type --help for details."
+        exit 1
+      fi
+      shift
+      ;;
+  esac
+done
+
+if [[ -z "${path+x}" ]]; then
+  path="."
+fi
+
+result=$(find $path -type f -print0 | xargs -0 stat --format '%Y :%y %n')
+
+if [[ $reverse = true ]]; then
+  result=$(echo "$result" | sort -n)
+else
+  result=$(echo "$result" | sort -nr)
+fi
+
+result=$(echo "$result" | cut -d: -f2-)
+
+echo "$result"

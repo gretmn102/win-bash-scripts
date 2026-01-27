@@ -1,0 +1,57 @@
+#!/bin/sh
+
+width=320
+
+usage() {
+    echo "Usage: $0 [-o output_path] input_path"
+    echo
+    echo "Where:"
+    echo "  -o output_path  The path for video output. If not specified, the output will be \$filename-\$width.\$ext"
+    echo "Options:"
+    echo "  -h, --help      Show this help."
+    exit 1
+}
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -o)
+            output_path="$2"
+            shift 2 # пропуск аргумента -o и его значения
+            ;;
+        *)
+            if [[ -z "$input_path" ]]; then
+                input_path="$1"
+            else
+                echo "Error: unknown argument '$input_path'."
+                echo "Type --help for details."
+                exit 1
+            fi
+            shift
+            ;;
+    esac
+done
+
+if [[ -z "$input_path" ]]; then
+    echo "Error: the input_path must be specified."
+    echo "Type --help for details."
+    exit 1
+fi
+
+echo "Input path: $input_path"
+
+create_output_path() {
+    local input_path=$1
+    local base="${input_path##*/}"
+    local filename="${base%.*}"
+    local ext="${base##*.}"
+    echo "$filename-$width.$ext"
+    return 0
+}
+
+if [[ -z "$output_path" ]]; then
+    output_path=$(create_output_path "$input_path")
+fi
+
+echo "Output path: $output_path"
+
+ffmpeg -i "$input_path" -filter:v scale=$width:-1 "$output_path"

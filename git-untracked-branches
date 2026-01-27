@@ -1,0 +1,54 @@
+#!/bin/bash
+
+set -euo pipefail
+
+usage() {
+  echo "Возвращает список untracked и remote error веток."
+  echo "Usage: $(basename "$0") [--remove-remote-error|-r]"
+  echo
+  echo "Where:"
+  echo "  --remove-remote-error|-r  Remove branches with remote error."
+  echo "Options:"
+  echo "  -h, --help                Show this help."
+  exit 1
+}
+
+remove_remote_error=false
+
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --help|-h)
+      usage
+      ;;
+    --remove-remote-error|-r)
+      remove_remote_error=true
+      shift
+      ;;
+    *)
+      echo "Error: unknown argument '$1'."
+      echo "Type --help for details."
+      exit 1
+      ;;
+  esac
+done
+
+local_branches=$(git branch --format '%(refname:short)')
+
+for branch in $local_branches; do
+  remote_tracking=$(git for-each-ref --format '%(upstream:short)' refs/heads/$branch)
+
+  if [ -z "$remote_tracking" ]; then
+    echo "$branch — untracked"
+    continue
+  fi
+
+  result=$(git show-ref --verify refs/remotes/$remote_tracking 2>&1 || true)
+  result=$(echo "$result" | sed -n '/fatal:/p')
+  if [ -n "$result" ]; then
+    echo "$branch — remote error"
+    if [[ $remove_remote_error = true ]]; then
+      git branch -D "$branch"
+    fi
+    echo
+  fi
+done

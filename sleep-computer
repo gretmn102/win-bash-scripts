@@ -1,0 +1,53 @@
+#!/bin/bash
+
+usage() {
+  echo "Usage: $(basename "$0") wait_minutes"
+  echo
+  echo "Where:"
+  echo "  wait_minutes  Number of minutes before sleep"
+  echo
+  echo "Parameters:"
+  echo "  --help, -h    Shows this message."
+}
+
+to_integer() {
+  local input="$1"
+  if [[ "$input" =~ ^-?[0-9]+$ ]]; then
+    echo $(($input))
+    return 0
+  else
+    return 1
+  fi
+}
+
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --help|-h)
+      usage
+      ;;
+    *)
+      if [[ -z "$wait_minutes" ]]; then
+        wait_minutes=$(to_integer "$1")
+        if [[ -z "$wait_minutes" ]]; then
+          echo "Error: $1 is not integer!"
+          echo "Type --help for details."
+          exit 1
+        fi
+        wait_minutes=$(($wait_minutes * 60))
+      else
+        echo "Error: unknown argument '$wait_minutes'."
+        echo "Type --help for details."
+        exit 1
+      fi
+      shift
+      ;;
+  esac
+done
+
+if [[ -z "$wait_minutes" ]]; then
+  echo "Error: wait_minutes not specified!"
+  echo "Type --help for details."
+  exit 1
+fi
+
+start \"\" cmd //c %SystemRoot%\\system32\\timeout.exe //t $wait_minutes //nobreak \& rundll32.exe powrprof.dll,SetSuspendState 0,1,0

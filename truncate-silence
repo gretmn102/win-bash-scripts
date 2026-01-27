@@ -1,0 +1,129 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+usage() {
+  echo "Usage: $(basename "$0") <input> <output>"
+  echo "Заменяет тихие места (если звук тише или равен -30 децибел, то он считается тихим) в указанном mp3 файле на тишину в 0.5 секунд"
+  echo
+  echo "Where:"
+  echo
+  echo "Options:"
+  echo "  --help, -h  Show this help."
+  exit 1
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    -*)
+      echo "Error: Unknown option: $1" >&2
+      exit 1
+      ;;
+    *)  # first non‑option argument -> start of positional args
+      break
+      ;;
+  esac
+done
+
+if [[ $# -lt 2 ]]; then
+  echo "Error: missing required arguments <input> <output>." >&2
+  echo "Type --help for details."
+  exit 1
+fi
+
+input="$1"
+output="$2"
+TMPDIR=$(mktemp -d)
+echo "create $TMPDIR"
+LOG="$TMPDIR/silence.log"
+SEG="$TMPDIR/segments.txt"
+FILTER_SCRIPT="$TMPDIR/filter.txt"
+
+# 1. Определяем тихие участки (≤ ‑30 dB) и сохраняем их в файл‑лог.
+#    Параметр `silencedetect` выводит начало и конец каждой тишины.
+ffmpeg -hide_banner -i "$input" -af \
+  "silencedetect=noise=-30dB:d=0.01" -f null - 2> "$LOG"
+
+# 2. Преобразуем лог в список команд `adelay`/`apad`, которые вставляют
+#    ровно 0.5 секунды тишины вместо каждого найденного тихого фрагмента.
+#    Формат: start_time duration
+awk '
+  /silence_start/ { start=$5 }
+  /silence_end/   { end=$5; printf "%f %f\n", start, end-start }
+' "$LOG" > "$SEG"
+
+# Если тихих участков нет – просто копируем файл
+if [[ ! -s "$SEG" ]]; then
+  ffmpeg -hide_banner -loglevel error -i "$input" -c copy "$output"
+  echo "Тихих участков не найдено; файл скопирован без изменений."
+  rm -rf "$TMPDIR"
+  exit 0
+fi
+
+# -------------------------------------------------
+# 3. Сгенерировать фильтры в отдельном файле
+#    (по 100 участков за раз, чтобы не перегружать память)
+MAX_PER_BATCH=100
+batch=0
+while read -r START DUR; do
+  # каждая строка добавляется к текущему батчу
+  echo "[0]adelay=${START}000|${START}000[s${batch}]; \
+    aevalsrc=0:d=0.5[sil${batch}]; \
+    [sil${batch}]adelay=${START}000|${START}000[del${batch}]; \
+    [s${batch}][del${batch}]amix=inputs=2[mix${batch}]" >> "$FILTER_SCRIPT"
+
+  ((batch+=1))
+  # если достигли лимита – закрываем текущий батч и начинаем новый
+  if (( batch % MAX_PER_BATCH == 0 )); then
+    echo "" >> "$FILTER_SCRIPT"
+  fi
+done < "$SEG"
+echo Сгенерировать фильтры в отдельном файле done
+
+# -------------------------------------------------
+# 4. Объединить все миксы в один финальный поток
+#    (используем `amix` с переменным числом входов)
+TOTAL=$(wc -l < "$SEG")
+# echo -n "[" >> "$FILTER_SCRIPT"
+for ((i=0;i<TOTAL;i++)); do
+  echo -n "[mix$i]" >> "$FILTER_SCRIPT"
+done
+echo "amix=inputs=$TOTAL[out]" >> "$FILTER_SCRIPT"
+echo Объединить все миксы в один финальный поток done
+
+# -------------------------------------------------
+# 5. Запустить ffmpeg, передавая файл‑скрипт
+ffmpeg -hide_banner -loglevel error -i "$input" -filter_complex_script "$FILTER_SCRIPT" \
+  -map "[out]" "$output"
+
+input="/e/downloads/mic/Исо 2025-10-23 13.58.03.mp3"
+output="/e/downloads/mic/Исо 2025-10-23 13.58.03 - truncate.mp3"
+FILTER_SCRIPT="/E/Users/user/AppData/Local/Temp/tmp.In60ybjU6z/filter.txt"
+ffmpeg -hide_banner \
+  -loglevel error \
+  -i "$input" \
+  -filter_complex_script "$FILTER_SCRIPT" \
+  -map "[out]" \
+  "$output"
+
+ffmpeg -hide_banner \
+  -i "$input" \
+  -filter_complex "\
+    [0:a]atrim=start=0:end=2,asetpts=PTS-STARTPTS[a0]; \
+    [0:a]atrim=start=4,asetpts=PTS-STARTPTS[a1]; \
+    anullsrc=r=48000:cl=stereo:d=0.5[sil]; \
+    [a0][sil][a1]concat=n=3:v=0:a=1[out]" \
+  -map "[out]" \
+  "$output"
+
+ffmpeg
+  -i input.wav \
+ output.wav
+
+
+echo "Готово: $output"
+# # rm -rf "$TMPDIR"

@@ -1,0 +1,39 @@
+#!/bin/bash
+
+usage() {
+  echo "Usage: $0 <date> <file_path> <commit_message>"
+  exit 1
+}
+
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --help|-h)
+      usage
+      ;;
+    *)
+      if [[ -z "$date" ]]; then
+        date="$1"
+      elif [[ -z "$file_path" ]]; then
+        file_path="$1"
+      elif [[ -z "$commit_message" ]]; then
+        commit_message="$1"
+      else
+        echo "Error: unknown argument '$1'."
+        echo "Type --help for details."
+        exit 1
+      fi
+      shift
+      ;;
+  esac
+done
+
+if [[ -z "$commit_message" ]]; then
+  echo "Error: commit message is empty."
+  echo "Type --help for details."
+  exit 1
+fi
+
+git add $file_path
+export GIT_AUTHOR_DATE="$date"
+export GIT_COMMITTER_DATE="$GIT_AUTHOR_DATE"
+git commit -m "$commit_message"

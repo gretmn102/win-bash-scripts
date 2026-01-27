@@ -1,0 +1,44 @@
+#!/bin/sh
+
+# todo: пропускать `paket-files` и `node-modules`
+
+usage() {
+  echo "Usage: $0 [--help | -h] <path>"
+  echo ""
+  echo "FOLDER PATH:"
+  echo ""
+  echo "  <path>            path to the .Net projects folder that contains"
+  echo "                    the \`obj\` and \`bin\` folders to be deleted"
+  echo ""
+  echo "OPTIONS:"
+  echo ""
+  echo "  --help or -h      display this list of options."
+  exit 1
+}
+
+remove() {
+  local dir_path=$1
+  find $dir_path \
+    -type d \( -name bin -o -name obj \) -prune -print \
+    -exec rm -rf '{}' +
+}
+
+if [ $# -eq 0 ]; then
+  usage
+  exit 0
+else
+  case $1 in
+    --help)
+      usage
+      exit 0
+      ;;
+    -h)
+      usage
+      exit 0
+      ;;
+    *)
+      remove $1
+      exit 0
+      ;;
+  esac
+fi
