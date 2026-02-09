@@ -1,0 +1,99 @@
+#!/bin/bash
+# source: https://www.dotlinux.net/blog/bash-countdown-timer/
+
+convert_to_seconds() {
+	# ... (reuse from previous step)
+	local time_str=$1
+	local total_seconds=0
+	while [[ $time_str =~ ([0-9]+)([hms]) ]]; do
+		local value=${BASH_REMATCH[1]}
+		local unit=${BASH_REMATCH[2]}
+		case $unit in
+			h) total_seconds=$((total_seconds + value * 3600)) ;;
+			m) total_seconds=$((total_seconds + value * 60)) ;;
+			s) total_seconds=$((total_seconds + value)) ;;
+		esac
+		time_str=${time_str#*"${BASH_REMATCH[0]}"}
+	done
+	if [ -n "$time_str" ]; then
+		echo "Error: Invalid time format. Use h (hours), m (minutes), s (seconds). Example: 1h30m" >&2
+		exit 1
+	fi
+	echo $total_seconds
+}
+
+play_alert() {
+	# ... (reuse from previous step)
+	if [[ "$OSTYPE" == "darwin"* ]]; then
+		afplay /System/Library/Sounds/Glass.aiff 2>/dev/null || echo -e "\a"
+	elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
+		(aplay /usr/share/sounds/alsa/Front_Center.wav 2>/dev/null || paplay /usr/share/sounds/freedesktop/stereo/complete.oga 2>/dev/null) || echo -e "\a"
+	else
+		echo -e "\a"
+	fi
+}
+
+# Pause/resume variables
+paused=false
+original_trap=$(trap -p SIGTSTP)  # Save original SIGTSTP trap
+
+# Trap SIGTSTP (Ctrl+Z) to pause/resume
+trap '
+	if [ "$paused" = false ]; then
+		paused=true
+		echo -ne "\rTimer paused. Press Ctrl+Z again to resume...\r"
+		# Pause the sleep process (if running)
+		if [ -n "$sleep_pid" ]; then
+			kill -STOP $sleep_pid 2>/dev/null
+		fi
+	else
+		paused=false
+		echo -ne "\rResuming timer...        \r"  # Clear pause message
+		# Resume the sleep process (if paused)
+		if [ -n "$sleep_pid" ]; then
+			kill -CONT $sleep_pid 2>/dev/null
+		fi
+	fi
+' SIGTSTP
+
+# Check for input
+if [ $# -eq 0 ]; then
+	echo "Error: Please provide a duration. Usage: $0 <time> (e.g., 5m, 1h30m, 45s)" >&2
+	exit 1
+fi
+
+total_seconds=$(convert_to_seconds "$1")
+if [ $total_seconds -le 0 ]; then
+	echo "Error: Please enter a positive duration." >&2
+	exit 1
+fi
+
+# Countdown loop with pause support
+while [ $total_seconds -gt 0 ]; do
+	# Skip decrement if paused
+	if [ "$paused" = false ]; then
+		hours=$((total_seconds / 3600))
+		remaining_seconds=$((total_seconds % 3600))
+		minutes=$((remaining_seconds / 60))
+		seconds=$((remaining_seconds % 60))
+		printf -v formatted_time "%02d:%02d:%02d" $hours $minutes $seconds
+		echo -ne "Time remaining: $formatted_time\r"
+		# Run sleep in background to allow pausing
+		sleep 1 &
+		sleep_pid=$!
+		wait $sleep_pid  # Wait for sleep to finish (or be paused)
+		sleep_pid=""  # Reset PID
+		total_seconds=$((total_seconds - 1))
+	else
+		# If paused, wait for user to resume
+		sleep 0.1  # Reduce CPU usage
+	fi
+done
+
+# Reset trap to original behavior
+eval "$original_trap"
+
+# Clear line and play alert
+echo -e "\rTimer complete! 🎉"
+# play_alert
+systemctl suspend
