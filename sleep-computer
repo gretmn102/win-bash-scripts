@@ -45,9 +45,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$wait_minutes" ]]; then
-  echo "Error: wait_minutes not specified!"
-  echo "Type --help for details."
-  exit 1
+  todo
+else
+  start \"\" cmd //c %SystemRoot%\\system32\\timeout.exe //t $wait_minutes //nobreak \& rundll32.exe powrprof.dll,SetSuspendState 0,1,0
 fi
-
-start \"\" cmd //c %SystemRoot%\\system32\\timeout.exe //t $wait_minutes //nobreak \& rundll32.exe powrprof.dll,SetSuspendState 0,1,0
