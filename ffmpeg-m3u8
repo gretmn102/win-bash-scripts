@@ -1,0 +1,43 @@
+#!/bin/sh
+
+usage() {
+  echo "Usage: $0 [-o output_path] url"
+  echo
+  echo "Where:"
+  echo "  -o output_path  The path for video output."
+  echo "Options:"
+  echo "  -h, --help    Show this help."
+  exit 1
+}
+
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    -o)
+      output_path="$2"
+      shift 2 # пропуск аргумента -o и его значения
+      ;;
+    *)
+      if [[ -z "$url" ]]; then
+        url="$1"
+      else
+        echo "Error: unknown argument '$url'."
+        echo "Type --help for details."
+        exit 1
+      fi
+      shift
+      ;;
+  esac
+done
+
+if [[ -z "$url" ]]; then
+  echo "Error: the url must be specified."
+  echo "Type --help for details."
+  exit 1
+fi
+
+ffmpeg \
+  -thread_queue_size 20 \
+  -i "$url" \
+  -user_agent "Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:109.0) Gecko/20100101 Firefox/115.0" \
+  -c copy \
+  "$output_path"
