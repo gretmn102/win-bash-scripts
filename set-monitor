@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+PRIMARY="${1:-}"
+
+case "$PRIMARY" in
+    HDMI-1) MODE="1360x768" ;;
+    eDP-1)  MODE="1368x768" ;;
+    *)
+        echo "Использование: $0 HDMI-1|eDP-1"
+        echo "Подключённые мониторы:"
+        xrandr --query | awk '$2 == "connected" {print "  " $1}'
+        exit 1
+        ;;
+esac
+
+if ! xrandr --query | awk -v out="$PRIMARY" \
+    '$1 == out && $2 == "connected" {found=1} END {exit !found}'; then
+    echo "Ошибка: монитор '$PRIMARY' не найден или не подключён."
+    exit 1
+fi
+
+if ! xrandr --query | awk -v out="$PRIMARY" -v mode="$MODE" '
+    $1 == out && $2 == "connected" {found=1; next}
+    found && /^[^[:space:]]/ {exit}
+    found && $1 == mode {supported=1}
+    END {exit !supported}
+'; then
+    echo "Ошибка: монитор '$PRIMARY' не предлагает разрешение $MODE."
+    exit 1
+fi
+
+args=(--output "$PRIMARY" --mode "$MODE" --primary --pos 0x0)
+
+while IFS= read -r output; do
+    [[ "$output" == "$PRIMARY" ]] && continue
+    args+=(--output "$output" --off)
+done < <(xrandr --query | awk '$2 == "connected" {print $1}')
+
+xrandr "${args[@]}"
+echo "Готово: $PRIMARY — основной монитор, разрешение $MODE; остальные отключены."
